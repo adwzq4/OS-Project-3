@@ -17,22 +17,21 @@
 // nMax is global so interrupt handler can affect it
 int nMax;
 
-// declares possible flag states
-//enum state { idle, want_in, in_cs };
-//
-//union semun {
-//    int val;
-//    struct semid_ds* buf;
-//    unsigned short* array;
-//};
-//
-//struct sembuf p = { 0, -1, SEM_UNDO };
-//struct sembuf v = { 0, +1, SEM_UNDO };
+// declare semaphore union
+union semun {
+    int val;
+    struct semid_ds* buf;
+    unsigned short* array;
+};
+
+// define wait and signal structs
+struct sembuf p = { 0, -1, SEM_UNDO };
+struct sembuf v = { 0, +1, SEM_UNDO };
 
 // kills all processes in this process group, which is ignored by master,
 // then zeros out nMax so no new processes are spawned
 static void interruptHandler(int s) {
-    fprintf(stderr, "Interrupt recieved.");
+    fprintf(stderr, "\nInterrupt recieved.\n");
     signal(SIGQUIT, SIG_IGN);
     kill(-getpid(), SIGQUIT);
     nMax = 0;
@@ -64,14 +63,13 @@ static int setupitimer(int t) {
 
 // reads an input file of strings into shared memory, then spawns up to nMax child processes, sMax at a time,
 // by fork-execing the palin executable to process each of those strings; then adds final time to logfile; stops
-// execution if tMax is reached; ensures there are no shared memory leaks or zombie processes
+// execution if tMax is reached; ensures there are no shared memory leaks, leftover semaphores, or zombie processes
 int main(int argc, char* argv[]) {
     int i, opt, tMax, sMax, status;
     int numStrings = 0, currentProcesses = 0;
     char c;
     pid_t  pid;
-    key_t shmkey;
-    key_t semkey;
+    key_t shmkey, semkey;
     struct timeval current, start;
     FILE* fp;
     FILE* fp2;
@@ -146,32 +144,21 @@ int main(int argc, char* argv[]) {
     } 
     rewind(fp);
     
-    // shared memory segment struct contains 2d string array, variables to control 
-    // critical section, and original start time
+    // create semaphore with specified key
+    semkey = ftok("master", 731);
+    int semid = semget(semkey, 1, 0666 | IPC_CREAT);
+    if (semid < 0) {
+        perror("semget"); exit(11);
+    }
+
+    // shared memory segment struct contains 2d string array and original start time
     struct shmseg {
-       // int turn;
-       // enum state flag[20];
         char strings[numStrings][128];
         struct timeval startTime;
     };
 
     // create shared memory segment the same size as struct shmseg and get its shmid
     shmkey = ftok("master", 137);
-    //semkey = ftok("master", 731);
-
-    //int semid = semget(KEY, 1, 0666 | IPC_CREAT);
-    //if (semid < 0)
-    //{
-    //    perror("semget"); exit(11);
-    //}
-
-    //union semun u;
-    //u.val = 1;
-    //if (semctl(semid, 0, SETVAL, u) < 0)
-    //{
-    //    perror("semctl"); exit(12);
-    //}
-
     int shmid = shmget(shmkey, sizeof(struct shmseg), 0666 | IPC_CREAT);
     if (shmid == -1) {
         perror("master: Error");
@@ -183,12 +170,6 @@ int main(int argc, char* argv[]) {
     if (shmptr == (void*)-1) {
         perror("master: Error");
         exit(-1);
-    }
-
-    // initialize turn to 0 and all flags to idle
-    shmptr->turn = 0;
-    for (i = 0; i < 20; i++) {
-        shmptr->flag[i] = idle;
     }
     
     shmptr->startTime = start;
@@ -256,6 +237,12 @@ int main(int argc, char* argv[]) {
     if (shmctl(shmid, IPC_RMID, 0) == -1) {
         perror("master: Error");
         exit(-1);
+    }
+
+    // removes semaphore resource
+    if ((semctl(semid, 0, IPC_RMID, 0)) == -1) { 
+        perror("\nCan't RPC_RMID.");
+        exit(0);
     }
 
     // appends final time to logfile

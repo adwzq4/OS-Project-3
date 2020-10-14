@@ -1,9 +1,7 @@
 master/palin
 	master reads an input file of strings into shared memory, then spawns children processes of palin to determine whether each string is a palindrome,
 or until a set process limit, or time limit, is reached; each child process is responsible for one string, which it writes to either palin.out or nopalin.out
-as appropriate; palin also writes process info to output.log, while ensuring that only one process can access those resources at a time, thus solving the critical
-section problem.
-	
+as appropriate; palin also writes process info to output.log, while ensuring that only one process can access those resources at a time via semaphores.	
 
 
 Installation
@@ -25,7 +23,7 @@ master [-n x] [-s x] [-t time] file
 
 
 Version Control
-	Git was used for version control. A full change log can be found at https://github.com/adwzq4/OS-Project-2/commits/master
+	Git was used for version control. A full change log can be found at https://github.com/adwzq4/OS-Project-3/commits/master
 
 
 
