@@ -28,8 +28,8 @@ union semun {
 struct sembuf p = { 0, -1, SEM_UNDO };
 struct sembuf v = { 0, +1, SEM_UNDO };
 
-// kills all processes in this process group, which is ignored by master,
-// then zeros out nMax so no new processes are spawned
+// sends message to stderr, kills all processes in this process group, which is 
+// ignored by master, then zeros out nMax so no new processes are spawned
 static void interruptHandler(int s) {
     fprintf(stderr, "\nInterrupt recieved.\n");
     signal(SIGQUIT, SIG_IGN);
